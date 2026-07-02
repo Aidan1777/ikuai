@@ -110,48 +110,6 @@ SENSOR_TYPES = {
         "label": "WAN1 IPv6",
         "name": "Wan1_ipv6",
     },
-    # Docker - gecoos-ac
-    "ikuai_docker_gecoos_cpu": {
-        "icon": "mdi:docker",
-        "label": "Docker gecoos CPU",
-        "name": "Docker_gecoos_cpu",
-        "unit_of_measurement": "%",
-    },
-    "ikuai_docker_gecoos_mem": {
-        "icon": "mdi:memory",
-        "label": "Docker gecoos 内存",
-        "name": "Docker_gecoos_mem",
-        "unit_of_measurement": "MB",
-    },
-
-    # Docker - lucky
-    "ikuai_docker_lucky_cpu": {
-        "icon": "mdi:docker",
-        "label": "Docker lucky CPU",
-        "name": "Docker_lucky_cpu",
-        "unit_of_measurement": "%",
-    },
-    "ikuai_docker_lucky_mem": {
-        "icon": "mdi:memory",
-        "label": "Docker lucky 内存",
-        "name": "Docker_lucky_mem",
-        "unit_of_measurement": "MB",
-    },
-
-    # Docker - fastnet
-    "ikuai_docker_fastnet_cpu": {
-        "icon": "mdi:docker",
-        "label": "Docker fastnet CPU",
-        "name": "Docker_fastnet_cpu",
-        "unit_of_measurement": "%",
-    },
-    "ikuai_docker_fastnet_mem": {
-        "icon": "mdi:memory",
-        "label": "Docker fastnet 内存",
-        "name": "Docker_fastnet_mem",
-        "unit_of_measurement": "MB",
-    },
-
     # LAN口
     "ikuai_lan_ip": {
         "icon": "mdi:lan",

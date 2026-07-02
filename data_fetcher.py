@@ -5,6 +5,7 @@ get ikuai info by token and sess_key
 
 import logging
 import json
+import re
 import time
 import datetime
 import asyncio
@@ -171,38 +172,39 @@ class DataFetcher:
             data_dict["ikuai_wan6_ip"] = data_block["data"][0].get("dhcp6_ip_addr", "")
 
     async def _get_ikuai_docker(self, sess_key, data_dict):
-        """Docker容器信息"""
+        """Docker容器信息 - 自动发现所有运行中的容器"""
         header = {'Cookie': f'username={self._username}; login=1; sess_key={sess_key}', 'Content-Type': 'application/json;charset=UTF-8'}
         json_body = {"func_name":"docker_server","action":"show","param":{"TYPE":"overview"}}
         resdata = await self.requestpost_json(self._host + "/Action/call", header, json_body)
-        _LOGGER.warning("_get_ikuai_docker full response: %s", str(resdata)[:800])
         data_block = self._get_data_block(resdata)
         if not data_block:
-            _LOGGER.warning("_get_ikuai_docker: no data_block. code=%s result=%s msg=%s", 
-                resdata.get("code") if isinstance(resdata, dict) else "N/A",
-                resdata.get("Result") if isinstance(resdata, dict) else "N/A",
-                resdata.get("message") if isinstance(resdata, dict) else "N/A")
             return
         
         overview = data_block.get("overview", {})
-        _LOGGER.debug("_get_ikuai_docker overview keys: %s", list(overview.keys()))
         containers = overview.get("running", [])
-        _LOGGER.debug("_get_ikuai_docker containers count: %s", len(containers))
-        container_map = {"gecoos": "gecoos_ac", "lucky": "lucky", "fastnet": "fastnet"}
+        discovered = []
         for container in containers:
             name = container.get("name", "")
-            for key in container_map:
-                if key in name:
-                    prefix = container_map[key]
-                    cpu = container.get("cpu_used", "0%").replace("%", "")
-                    mem_bytes = container.get("memused", 0)
-                    if isinstance(mem_bytes, str):
-                        try: mem_bytes = float(mem_bytes)
-                        except: mem_bytes = 0
-                    mem_mb = round(mem_bytes / 1024 / 1024, 2)
-                    _LOGGER.debug("_get_ikuai_docker setting %s_cpu=%s mem=%s", prefix, cpu, mem_mb)
-                    data_dict[f"ikuai_docker_{prefix}_cpu"] = cpu
-                    data_dict[f"ikuai_docker_{prefix}_mem"] = str(mem_mb)
+            if not name:
+                continue
+            # 清理容器名，只保留字母数字和下划线作为 sensor key
+            sanitized = re.sub(r'[^a-zA-Z0-9]', '_', name).strip('_').lower()
+            cpu = container.get("cpu_used", "0%").replace("%", "")
+            mem_bytes = container.get("memused", 0)
+            if isinstance(mem_bytes, str):
+                try: mem_bytes = float(mem_bytes)
+                except: mem_bytes = 0
+            mem_mb = round(mem_bytes / 1024 / 1024, 2)
+            data_dict[f"ikuai_docker_{sanitized}_cpu"] = cpu
+            data_dict[f"ikuai_docker_{sanitized}_mem"] = str(mem_mb)
+            discovered.append({
+                "name": name,
+                "sanitized": sanitized,
+                "cpu": cpu,
+                "mem": str(mem_mb),
+            })
+            _LOGGER.debug("_get_ikuai_docker discovered: %s (key=%s) cpu=%s mem=%s", name, sanitized, cpu, mem_mb)
+        data_dict["docker_containers"] = discovered
 
     async def _get_ikuai_upgrade_info(self, sess_key, data_dict):
         """固件升级信息: 当前版本、最新版本、更新日志、下载地址"""

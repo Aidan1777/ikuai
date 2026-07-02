@@ -15,6 +15,22 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     for sensor in SENSOR_TYPES:
         sensors.append(IKUAISensor(sensor, coordinator))
 
+    # 动态发现并添加 Docker 容器传感器
+    docker_containers = coordinator.data.get("docker_containers", []) if coordinator.data else []
+    for c in docker_containers:
+        sensors.append(IKUAISensor(
+            f"ikuai_docker_{c['sanitized']}_cpu", coordinator,
+            name=f"Docker {c['name']} CPU",
+            icon="mdi:docker",
+            unit="%",
+        ))
+        sensors.append(IKUAISensor(
+            f"ikuai_docker_{c['sanitized']}_mem", coordinator,
+            name=f"Docker {c['name']} 内存",
+            icon="mdi:memory",
+            unit="MB",
+        ))
+
     async_add_entities(sensors, False)
 
 class IKUAISensor(CoordinatorEntity):
@@ -22,15 +38,21 @@ class IKUAISensor(CoordinatorEntity):
     
     _attr_has_entity_name = True
 
-    def __init__(self, kind, coordinator):
+    def __init__(self, kind, coordinator, name=None, icon=None, unit=None, device_class=None):
         """Initialize the sensor."""
         super().__init__(coordinator)
         self.kind = kind
         self.coordinator = coordinator
+        self._custom_name = name
+        self._custom_icon = icon
+        self._custom_unit = unit
+        self._custom_device_class = device_class
 
     @property
     def name(self):
         """Return the name of the sensor."""
+        if self._custom_name:
+            return self._custom_name
         return f"{SENSOR_TYPES[self.kind]['name']}"
 
     @property
@@ -70,17 +92,23 @@ class IKUAISensor(CoordinatorEntity):
     @property
     def icon(self):
         """Return the icon of the sensor."""
+        if self._custom_icon:
+            return self._custom_icon
         return SENSOR_TYPES[self.kind]["icon"]
         
     @property
     def unit_of_measurement(self):
         """Return the unit of measurement."""
+        if self._custom_unit:
+            return self._custom_unit
         if SENSOR_TYPES[self.kind].get("unit_of_measurement"):
             return SENSOR_TYPES[self.kind]["unit_of_measurement"]
         
     @property
     def device_class(self):
         """Return the device class."""
+        if self._custom_device_class:
+            return self._custom_device_class
         if SENSOR_TYPES[self.kind].get("device_class"):
             return SENSOR_TYPES[self.kind]["device_class"]
         
