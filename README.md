@@ -12,24 +12,29 @@
 
 ## 修改概述
 
-在保留上游核心功能（传感器监控、按钮控制、MAC 开关、设备追踪、UI/Const 双模式配置）的基础上，进行了 **2 轮功能增强**：
+在保留上游核心功能（传感器监控、按钮控制、MAC 开关、设备追踪、UI/Const 双模式配置）的基础上，进行了 **3 轮功能增强**：
 
 ---
 
 ## 修改一：Docker 容器监控 + 双 WAN 支持
 
-### 新增传感器（`const.py` → `SENSOR_TYPES`）
+### 新增传感器（`const.py` → `SENSOR_TYPES` + `sensor.py` 动态生成）
 
-相较上游的 14 个传感器，新增了 **7 个** 实体，总计 **21 个**：
+相较上游的 14 个传感器，新增了 **动态 Docker 容器监控** 和 **网络接口** 传感器：
+
+**Docker 容器（自动发现）**：
+
+不再硬编码容器名称。集成会通过 `docker_server → overview` API 自动发现爱快上所有运行中的 Docker 容器，并为每个容器创建 2 个传感器（CPU + 内存）。
+
+> 示例：如果爱快上运行 gecoos-ac、lucky、fastnet 三个容器，自动生成：
+> - `ikuai_docker_gecoos_ac_cpu` / `ikuai_docker_gecoos_ac_mem`
+> - `ikuai_docker_lucky_cpu` / `ikuai_docker_lucky_mem`
+> - `ikuai_docker_fastnet_cpu` / `ikuai_docker_fastnet_mem`
+
+**LAN IP**：
 
 | 实体键 | 用途 |
 |--------|------|
-| `ikuai_docker_gecoos_cpu` | Docker 容器 gecoos-ac CPU 占用 (%) |
-| `ikuai_docker_gecoos_mem` | Docker 容器 gecoos-ac 内存占用 (MB) |
-| `ikuai_docker_lucky_cpu` | Docker 容器 lucky CPU 占用 (%) |
-| `ikuai_docker_lucky_mem` | Docker 容器 lucky 内存占用 (MB) |
-| `ikuai_docker_fastnet_cpu` | Docker 容器 fastnet CPU 占用 (%) |
-| `ikuai_docker_fastnet_mem` | Docker 容器 fastnet 内存占用 (MB) |
 | `ikuai_lan_ip` | LAN 口 IP 地址 |
 
 同时新增 WAN2 支持：
@@ -42,7 +47,9 @@
 ### 数据获取（`data_fetcher.py`）
 
 - **新增方法 `_get_ikuai_docker()`**：通过 `func_name=docker_server` API 获取容器运行状态
-  - 硬编码匹配 3 个 Docker 容器：`gecoos_ac`、`lucky`、`fastnet`
+  - **自动发现**所有运行中的 Docker 容器，而非硬编码匹配
+  - 容器名称自动清理为合法 sensor key（去除特殊字符，转小写）
+  - 每个容器生成 `ikuai_docker_{name}_cpu` 和 `ikuai_docker_{name}_mem` 数据项
   - CPU 使用率解析自 `cpu_used` 字段
   - 内存使用量从字节转换为 MB
 - **新增方法 `_get_ikuai_upgrade_info()`**：固件更新信息获取（同修改二）
@@ -102,20 +109,43 @@ PLATFORMS = [Platform.SENSOR, Platform.BUTTON, Platform.UPDATE]
 
 ---
 
+## 修改三：Docker 容器自动发现
+
+### 改动说明
+
+将硬编码的容器名称匹配改为**动态自动发现**。不再需要修改代码即可监控任意 Docker 容器。
+
+### 修改文件
+
+| 文件 | 改动 |
+|------|------|
+| `data_fetcher.py` | `_get_ikuai_docker()`：移除硬编码 `container_map`，遍历所有 running 容器输出 `docker_containers` 列表 |
+| `const.py` | 删除 6 个硬编码 Docker 传感器定义 |
+| `sensor.py` | `IKUAISensor` 支持 `name/icon/unit` 参数覆盖；`async_setup_entry` 读取 `docker_containers` 动态创建传感器 |
+
+### 工作原理
+
+1. `data_fetcher` 每次刷新调用 `docker_server` API 获取所有运行容器
+2. 容器名称经过清理（去除特殊字符 → 下划线 → 小写）作为 sensor key
+3. 数据写入 `docker_containers` 列表（`{name, sanitized, cpu, mem}`）
+4. `sensor.py` 在 setup 时读取列表，为每个容器创建 CPU + 内存两个传感器实体
+
+---
+
 ## 文件清单
 
 ```
 custom_components/ikuai/
 ├── __init__.py          # 集成入口 + DataUpdateCoordinator（新增 UPDATE 平台）
-├── const.py             # 常量定义（21 传感器 + 1 按钮 + 固件更新配置）
-├── config_flow.py       # UI 配置流程（未修改）
-├── data_fetcher.py      # API 数据获取（新增 Docker + 固件升级方法）
-├── sensor.py            # 传感器实体（未修改）
-├── switch.py            # 开关实体 / MAC 控制（未修改）
-├── button.py            # 按钮实体（未修改）
-├── device_tracker.py    # 设备追踪实体（未修改）
+├── const.py             # 常量定义（15 静态传感器 + 1 按钮 + 固件更新配置）
+├── config_flow.py       # UI 配置流
+├── data_fetcher.py      # API 数据获取（自动发现 Docker + 固件升级）
+├── sensor.py            # 传感器实体（支持动态 Docker 传感器创建）
+├── switch.py            # 开关实体 / MAC 控制
+├── button.py            # 按钮实体
+├── device_tracker.py    # 设备追踪实体
 ├── update.py            # 固件更新实体（新增）
-├── manifest.json         # 集成元数据
+├── manifest.json        # 集成元数据
 └── translations/
     ├── en.json
     └── zh-Hans.json
@@ -131,7 +161,7 @@ custom_components/ikuai/
 4. 填入路由器地址、用户名、密码完成配置
 
 实体将自动出现在：
-- 传感器：`sensor.*`（21 个）
+- 传感器：`sensor.*`（15 个基础传感器 + 每个 Docker 容器 2 个）
 - 按钮：`button.*`（1 个：重连 WAN）
 - 更新：`update.firmware_update`（1 个：固件更新）
 - 设备追踪：`device_tracker.*`（按配置生成）
