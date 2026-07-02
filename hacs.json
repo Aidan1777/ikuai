@@ -1,0 +1,7 @@
+{
+  "name": "爱快路由器",
+  "render_readme": true,
+  "domains": ["sensor", "switch", "button", "device_tracker"],
+  "homeassistant": "2024.1.0",
+  "iot_class": "local_polling"
+}
